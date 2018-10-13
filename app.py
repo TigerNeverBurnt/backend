@@ -1,7 +1,4 @@
 import nltk
-
-nltk.download('stopwords')
-nltk.download('punkt')
 from flask import Flask, request, jsonify
 from azure.cognitiveservices.search.imagesearch import ImageSearchAPI
 from msrest.authentication import CognitiveServicesCredentials
@@ -13,6 +10,12 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import requests as req
 import json
+from pprint import pprint
+import exifread
+from io import BytesIO
+
+nltk.download('stopwords')
+nltk.download('punkt')
 
 ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -22,6 +25,16 @@ def init_aws():
     os.environ['AWS_CONFIG_FILE'] = ROOT_PATH + os.sep + ".aws" + os.sep + "config"
     return boto3.client('rekognition')
 '''
+
+
+# https://maps.googleapis.com/maps/api/geocode/json?address=1600+Amphitheatre+Parkway,+Mountain+View,+CA&key=YOUR_API_KEY
+def init_google_map():
+    with open('./.google/config.json') as f:
+        data = json.load(f)
+        return data['google_map_key']
+
+
+# https://maps.googleapis.com/maps/api/geocode/json?latlng=40.714224,-73.961452&key=YOUR_API_KEY
 
 def init_bing_image_search_api():
     with open('./.azure/config.json') as f:
@@ -42,6 +55,29 @@ def init_text_analytic_api():
     return header, endpoint
 
 
+def init_text_entity_api():
+    with open('./.azure/config.json') as f:
+        data = json.load(f)
+        header = {
+            'Ocp-Apim-Subscription-Key': data['text_analytic_key'],
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+
+    return header
+
+
+def init_search_news_api():
+    with open('./.azure/config.json') as f:
+        data = json.load(f)
+        header = {
+            'Ocp-Apim-Subscription-Key': data['bing_image_search_key'],
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        return header
+
+
 def init_stop_word():
     return set(stopwords.words('english'))
 
@@ -60,8 +96,53 @@ def init_fake_header():
 STOP_WORD = init_stop_word()
 BING_IMAGE_SEARCH_CLIENT = init_bing_image_search_api()
 TEXT_ANALYTIC_API_HEADER, ENDPOINT = init_text_analytic_api()
-#AWS_CLIENT = init_aws()
+# AWS_CLIENT = init_aws()
 FAKE_HEADER = init_fake_header()
+GOOGLE_MAP_KEY = init_google_map()
+NEWS_SEARCH_API_HEADER = init_search_news_api()
+
+
+def get_entity_by_str(string):
+    sentence_list = str(string).split('.')
+    documents = list(map(lambda x: {'id': x[1], 'text': x[0]}, zip(sentence_list, range(100))))
+    endpoint = "https://southcentralus.api.cognitive.microsoft.com/text/analytics/v2.0/entities"
+    request_json = {"documents": documents}
+    res = req.post(endpoint, headers=TEXT_ANALYTIC_API_HEADER, json=request_json)
+    json_data = json.loads(res.text)
+    return json_data
+
+
+def get_location_by_str(string):
+    string = ''.join(e for e in string if e.isalnum() or e.isspace())
+    string = string.replace(' ', '+')
+    res = req.get('https://maps.googleapis.com/maps/api/geocode/json',
+                  params={'address': string, 'key': GOOGLE_MAP_KEY})
+    json_data = json.loads(res.text)
+    return json_data
+
+
+# get_location_by_str("university of missouri")
+
+def get_location_by_lat_lon(location):
+    lat = location['lat']
+    lon = location['lon']
+    latlng = str(lat) + ',' + str(lon)
+    res = req.get('https://maps.googleapis.com/maps/api/geocode/json', params={'latlng': latlng, 'key': GOOGLE_MAP_KEY})
+    json_data = json.loads(res.text)
+    return json_data
+
+
+# get_location_by_lat_lon({'lat': '40.714224', 'lon': '-73.961452'})
+
+def get_new_by_str(search_term):
+    search_url = 'https://api.cognitive.microsoft.com/bing/v7.0/news/search'
+    params = {"q": search_term, "textDecorations": True, "textFormat": "HTML"}
+    res = req.get(search_url, headers=NEWS_SEARCH_API_HEADER, params=params)
+    res.raise_for_status()
+    return res.json()
+
+
+# pprint(get_new_by_str("Panama City residents learn harsh lesson after Hurricane Michael"))
 
 
 def filter_stop_word(string):
@@ -91,6 +172,7 @@ def key_phrase(string):
         result = None
     return result
 
+
 '''
 def get_image_detect_labels_by_url(url):
     result = None
@@ -103,9 +185,63 @@ def get_image_detect_labels_by_url(url):
     return result
 '''
 
+
+def exifread_infos(photo):
+    # Open image file for reading (binary mode)
+    f = open(photo, 'rb')
+    # Return Exif tags
+    tags = exifread.process_file(f)
+
+    try:
+        LatRef = tags["GPS GPSLatitudeRef"].printable
+        Lat = tags["GPS GPSLatitude"].printable[1:-1].replace(" ", "").replace("/", ",").split(",")
+        Lat = float(Lat[0]) + float(Lat[1]) / 60 + float(Lat[2]) / float(Lat[3]) / 3600
+        if LatRef != "N":
+            Lat = Lat * (-1)
+        LonRef = tags["GPS GPSLongitudeRef"].printable
+        Lon = tags["GPS GPSLongitude"].printable[1:-1].replace(" ", "").replace("/", ",").split(",")
+        Lon = float(Lon[0]) + float(Lon[1]) / 60 + float(Lon[2]) / float(Lon[3]) / 3600
+        if LonRef != "E":
+            Lon = Lon * (-1)
+        f.close()
+    except:
+        return "ERROR:请确保照片包含经纬度等EXIF信息。"
+    else:
+        return Lat, Lon
+
+
+def exifread_infos_by_url(url):
+    res = req.get(url, headers=FAKE_HEADER)
+    buffer = BytesIO()
+    buffer.write(res.content)
+    buffer.seek(0)
+    tags = exifread.process_file(buffer)
+
+    try:
+        LatRef = tags["GPS GPSLatitudeRef"].printable
+        Lat = tags["GPS GPSLatitude"].printable[1:-1].replace(" ", "").replace("/", ",").split(",")
+        Lat = float(Lat[0]) + float(Lat[1]) / 60 + float(Lat[2]) / float(Lat[3]) / 3600
+        if LatRef != "N":
+            Lat = Lat * (-1)
+        LonRef = tags["GPS GPSLongitudeRef"].printable
+        Lon = tags["GPS GPSLongitude"].printable[1:-1].replace(" ", "").replace("/", ",").split(",")
+        Lon = float(Lon[0]) + float(Lon[1]) / 60 + float(Lon[2]) / float(Lon[3]) / 3600
+        if LonRef != "E":
+            Lon = Lon * (-1)
+    except:
+        return "ERROR:请确保照片包含经纬度等EXIF信息。"
+    else:
+        return Lat, Lon
+
+
 # print(get_image_detect_labels_by_url(""))
 # print(filter_stop_word("This is a sample sentence, showing off the stop words filtration."))
 # print(key_phrase("asdfasdfasdfasdfasdfasdfaasdfa"))
+# print(exifread_infos_by_url('https://exposingtheinvisible.org/ckeditor_assets/pictures/32/content_example_ibiza.jpg'))
+# https://raw.githubusercontent.com/ianare/exif-samples/master/jpg/gps/DSCN0010.jpg
+# 12 21 25 27 29 38 40 42
+
+
 app = Flask(__name__)
 CORS(app)
 
@@ -153,7 +289,7 @@ def get_json():
     # filtered_search_text = filter_stop_word(search_text)
 
     key_phrase_main_text_list = key_phrase(main_text)
-    key_phrase_search_text_list = key_phrase(search_text)
+    # key_phrase_search_text_list = key_phrase(search_text)
 
     for query in key_phrase_main_text_list or []:
         image_results = BING_IMAGE_SEARCH_CLIENT.images.search(query=query)
@@ -164,6 +300,14 @@ def get_json():
                                     "date_published": x.date_published},
                          image_results.value)))
 
+    image_results = BING_IMAGE_SEARCH_CLIENT.images.search(query=search_text)
+    if image_results.value:
+        result_search.extend(
+            list(map(lambda x: {"thumbnail_url": x.thumbnail_url, "content_url": x.content_url, "detail": x.name,
+                                "description": x.description, "host_page_url": x.host_page_url,
+                                "date_published": x.date_published},
+                     image_results.value)))
+    '''
     for query in key_phrase_search_text_list or []:
         image_results = BING_IMAGE_SEARCH_CLIENT.images.search(query=query)
         if image_results.value:
@@ -172,12 +316,85 @@ def get_json():
                                     "description": x.description, "host_page_url": x.host_page_url,
                                     "date_published": x.date_published},
                          image_results.value)))
+    '''
 
     result = []
-    result.extend(no_null_list(result_main))
-    result.extend(no_null_list(result_search))
+    result.extend(no_null_list(result_search[0:5]))
+    result.extend(no_null_list(result_main[0:20]))
     sorted_result = sorted(result, key=lambda k: k['date_published'], reverse=True)
-    return jsonify(sorted_result[:50])
+    return jsonify(sorted_result[:25])
+
+
+@app.route('/img', methods=['POST'])
+def get_location_json_of_img():
+    result = {}
+    img_url = no_null_str(request.json["img_url"])
+    lat, lon = exifread_infos_by_url(img_url)
+    result['lat'] = lat
+    result['lon'] = lon
+    return jsonify(result)
+
+
+'''
+{
+    "main_text": "Panama City residents learn harsh lesson after Hurricane Michael I never would have stayedANAMA CITY, Fla.Gregg Ebersole trekked to the Panama City Marina from his devastated neighborhood on Thursday morning to find a miraculous sight: Nestled amid the twisted metal on the damaged dock was his boat, just as he had left it on a rack.Everything is tossed around like its a toy, said Ebersole, surveying the aftermath. Mine is sitting there all nice and pretty.It was a small dose of comfort after Hurricane Michael thrashed the Florida Panhandle on Wednesday and blew apart much in its path. Ebersoles single-story brick home survived, but he said he was caught flat-footed by the report that Michael had intensified into a powerful Category 4 storm quickly as it guzzled warm water on its advance up the Gulf of Mexico.If I knew it was going to be a Cat 4 with a direct hit, I never would have stayed, Ebersole said. Two days ago, we were out boating in the sunshine. This snuck up on us so quick.",
+    "search_text": ""
+}
+'''
+
+
+@app.route('/entity', methods=['POST'])
+def get_entity_by_json():
+    result = {}
+    main_text = no_null_str(request.json["main_text"])
+    return jsonify(get_entity_by_str(main_text))
+
+
+'''
+{
+  "lat": "40.714224",
+  "lon": "-73.961452"
+}
+'''
+
+
+@app.route('/location', methods=['POST'])
+def reverse_location_search():
+    return jsonify(get_location_by_lat_lon(request.json))
+
+
+'''
+{
+  "name": "University Of missouri"
+}
+'''
+
+
+@app.route('/getlocationbyname', methods=['POST'])
+def location_search():
+    string = no_null_str(request.json["name"])
+    return jsonify(get_location_by_str(string))
+
+
+'''
+{
+  "query": "Hurricane"
+}
+'''
+
+
+@app.route('/news', methods=['POST'])
+def news_search():
+    string = no_null_str(request.json["query"])
+    return jsonify(get_new_by_str(string))
+
+
+@app.route('/exif', methods=['GET'])
+def get_example_of_exif_img():
+    data = []
+    for i in [10, 12, 21, 25, 27, 29, 38, 40, 42]:
+        data.append(f'https://raw.githubusercontent.com/ianare/exif-samples/master/jpg/gps/DSCN00{i}.jpg')
+    return jsonify(data)
 
 
 if __name__ == '__main__':

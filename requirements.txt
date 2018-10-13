@@ -9,6 +9,7 @@ certifi==2018.8.24
 chardet==3.0.4
 Click==7.0
 docutils==0.14
+ExifRead==2.1.2
 Flask==1.0.2
 Flask-Cors==3.0.6
 gunicorn==19.9.0
