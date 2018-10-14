@@ -19,12 +19,11 @@ nltk.download('punkt')
 
 ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
 
-'''
+
 def init_aws():
     os.environ['AWS_SHARED_CREDENTIALS_FILE'] = ROOT_PATH + os.sep + ".aws" + os.sep + "credentials"
     os.environ['AWS_CONFIG_FILE'] = ROOT_PATH + os.sep + ".aws" + os.sep + "config"
     return boto3.client('rekognition')
-'''
 
 
 # https://maps.googleapis.com/maps/api/geocode/json?address=1600+Amphitheatre+Parkway,+Mountain+View,+CA&key=YOUR_API_KEY
@@ -96,7 +95,7 @@ def init_fake_header():
 STOP_WORD = init_stop_word()
 BING_IMAGE_SEARCH_CLIENT = init_bing_image_search_api()
 TEXT_ANALYTIC_API_HEADER, ENDPOINT = init_text_analytic_api()
-# AWS_CLIENT = init_aws()
+AWS_CLIENT = init_aws()
 FAKE_HEADER = init_fake_header()
 GOOGLE_MAP_KEY = init_google_map()
 NEWS_SEARCH_API_HEADER = init_search_news_api()
@@ -184,6 +183,19 @@ def get_image_detect_labels_by_url(url):
         pass
     return result
 '''
+
+
+def get_people_from_url(url):
+    response = None
+    try:
+        res = req.get(url, headers=FAKE_HEADER)
+        response = AWS_CLIENT.recognize_celebrities(Image={'Bytes': res.content})
+    except Exception:
+        pass
+    return response
+
+
+# pprint(get_people_from_url('https://pbs.twimg.com/profile_images/808534690957135872/bTja4Zot_200x200.jpg'))
 
 
 def exifread_infos(photo):
@@ -278,7 +290,7 @@ def hello():
 
 
 @app.route('/', methods=['POST'])
-def get_json():
+def web_get_images_by_search_text():
     result_main = []
     result_search = []
 
@@ -395,6 +407,12 @@ def get_example_of_exif_img():
     for i in [10, 12, 21, 25, 27, 29, 38, 40, 42]:
         data.append(f'https://raw.githubusercontent.com/ianare/exif-samples/master/jpg/gps/DSCN00{i}.jpg')
     return jsonify(data)
+
+
+@app.route('/people', methods=['POST'])
+def get_people():
+    string = no_null_str(request.json["img_url"])
+    return jsonify(get_people_from_url(string))
 
 
 if __name__ == '__main__':

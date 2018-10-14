@@ -1,6 +1,40 @@
 ## TigerHack 2018
 
+## Team Member
+
+- Huiming Sun 
+- Xinrui Yang
+- Han Song
+- Ding Hao
+- Jianan Ni
+
 ---
+
+## Deploy in Ubuntu-18.04
+
+sudo apt-get update
+sudo apt-get install python3.6
+sudo apt-get install python3-pip
+sudo pip3 install virtualenv
+git clone https://github.com/TigerNeverBurnt/backend.git
+cd backend
+virtualenv venv 
+source venv/bin/activate
+pip install -r requirements.txt
+gunicorn app:app -c gunicorn.conf.py
+
+
+## Operating Parameters
+- bind = '0.0.0.0:8000'
+- backlog = 2048
+- pidfile ./app.pid
+- worker 5
+- ....
+
+You Can Edit `gunicorn.conf.py` to change default config 
+
+## Purpose
+
 
 当前媒体工作者在工作中会遇到各式各样的问题
 典型的问题有几种
@@ -8,7 +42,6 @@
 1. 对于非自己领域的事物的认知困难 （从而对采访对象提出的问题不合时宜或者是在写新闻稿的时候十分门外汉）
 典型例子是前几周的新闻“黎曼猜想 阿蒂亚”
 很多新闻工作者对“黎曼猜想” 或者 “阿蒂亚” 这个人并没有足够的知识（哪怕是最浅显的）
-
 
 实际上上面的几点问题都可以概括为没有工具链（技术栈）以及工具链没有得到良好的配置
 
@@ -29,7 +62,7 @@
 
 功能：
 
-1. 类似的报道
+1. 寻找类似报道
 
 事件，地理，时间
 
@@ -42,6 +75,16 @@
 
 正文字段 -> 生成函数
 搜索字段 -> 抑制/激发函数
+
+3. 名人识别
+
+
+4. 地理联系
+
+
+5. 高亮联想
+
+6. 图片推荐
 
 但是不可否认的是对于很多新闻工作者
 对于第一手报道，他们很少会使用网络上流传的图片
@@ -57,46 +100,3 @@
 这些图片或者文字也往往隐含了地理信息
 
 通过这些地理信息再找到和这个地区相关的信息
-
-
-
-大文本框[媒体工作者编辑器]
-搜索框_文本[]
-搜索框_语音[]
-
-{
-main_text -> String
-search_text -> String
-} 
-
-结果一：
-图片
-和图片相关的url
-
-结果二：
-实体 -> 地名，名词
-
-
--> 
-数组 Card
-
-# for gunicorn in *unix
-#    from werkzeug.contrib.fixers import ProxyFix
-#    app.wsgi_app = ProxyFix(app.wsgi_app)
-
-Key Phrase Extraction API使用Key Phrases方法从文本文档中提取关键短语。
-
-pip install -U flask-cors
-
-CORS
-@cross_origin()
-
-
-## install 
-
-
-
-# gunicorn -w 4 -b 127.0.0.1:8000 入口文件名:app
-# pip freeze > requirements.txt
-# https://www.jianshu.com/p/9ede1f0854a1
-# https://juejin.im/post/5a5c1825f265da3e3e33bf70
