@@ -99,6 +99,7 @@ AWS_CLIENT = init_aws()
 FAKE_HEADER = init_fake_header()
 GOOGLE_MAP_KEY = init_google_map()
 NEWS_SEARCH_API_HEADER = init_search_news_api()
+ERROR = {"code": 404}
 
 
 def get_entity_by_str(string):
@@ -284,6 +285,15 @@ def no_null_list(o):
         return o
 
 
+def no_null_json(o):
+    if o is None:
+        return ERROR
+    elif o == {}:
+        return ERROR
+    else:
+        return o
+
+
 @app.route('/hello')
 def hello():
     return "Hello"
@@ -291,60 +301,57 @@ def hello():
 
 @app.route('/', methods=['POST'])
 def web_get_images_by_search_text():
-    result_main = []
-    result_search = []
+    result = []
+    try:
+        result_main = []
+        result_search = []
 
-    main_text = no_null_str(request.json["main_text"])
-    search_text = no_null_str(request.json["search_text"])
+        main_text = no_null_str(request.json["main_text"])
+        search_text = no_null_str(request.json["search_text"])
 
-    # filtered_main_words = filter_stop_word(main_text)
-    # filtered_search_text = filter_stop_word(search_text)
+        # filtered_main_words = filter_stop_word(main_text)
+        # filtered_search_text = filter_stop_word(search_text)
 
-    key_phrase_main_text_list = key_phrase(main_text)
-    # key_phrase_search_text_list = key_phrase(search_text)
+        key_phrase_main_text_list = key_phrase(main_text)
+        # key_phrase_search_text_list = key_phrase(search_text)
 
-    for query in key_phrase_main_text_list or []:
-        image_results = BING_IMAGE_SEARCH_CLIENT.images.search(query=query)
-        if image_results.value:
-            result_main.extend(
-                list(map(lambda x: {"thumbnail_url": x.thumbnail_url, "content_url": x.content_url, "detail": x.name,
-                                    "description": x.description, "host_page_url": x.host_page_url,
-                                    "date_published": x.date_published},
-                         image_results.value)))
+        for query in key_phrase_main_text_list or []:
+            image_results = BING_IMAGE_SEARCH_CLIENT.images.search(query=query)
+            if image_results.value:
+                result_main.extend(
+                    list(
+                        map(lambda x: {"thumbnail_url": x.thumbnail_url, "content_url": x.content_url, "detail": x.name,
+                                       "description": x.description, "host_page_url": x.host_page_url,
+                                       "date_published": x.date_published},
+                            image_results.value)))
 
-    image_results = BING_IMAGE_SEARCH_CLIENT.images.search(query=search_text)
-    if image_results.value:
-        result_search.extend(
-            list(map(lambda x: {"thumbnail_url": x.thumbnail_url, "content_url": x.content_url, "detail": x.name,
-                                "description": x.description, "host_page_url": x.host_page_url,
-                                "date_published": x.date_published},
-                     image_results.value)))
-    '''
-    for query in key_phrase_search_text_list or []:
-        image_results = BING_IMAGE_SEARCH_CLIENT.images.search(query=query)
+        image_results = BING_IMAGE_SEARCH_CLIENT.images.search(query=search_text)
         if image_results.value:
             result_search.extend(
                 list(map(lambda x: {"thumbnail_url": x.thumbnail_url, "content_url": x.content_url, "detail": x.name,
                                     "description": x.description, "host_page_url": x.host_page_url,
                                     "date_published": x.date_published},
                          image_results.value)))
-    '''
 
-    result = []
-    result.extend(no_null_list(result_search[0:5]))
-    result.extend(no_null_list(result_main[0:20]))
-    sorted_result = sorted(result, key=lambda k: k['date_published'], reverse=True)
-    return jsonify(sorted_result[:25])
+        result.extend(no_null_list(result_search[0:5]))
+        result.extend(no_null_list(result_main[0:20]))
+        result = sorted(result, key=lambda k: k['date_published'], reverse=True)
+    except Exception:
+        pass
+    return jsonify(no_null_json(result[:25]))
 
 
 @app.route('/img', methods=['POST'])
 def get_location_json_of_img():
     result = {}
-    img_url = no_null_str(request.json["img_url"])
-    lat, lon = exifread_infos_by_url(img_url)
-    result['lat'] = lat
-    result['lon'] = lon
-    return jsonify(result)
+    try:
+        img_url = no_null_str(request.json["img_url"])
+        lat, lon = exifread_infos_by_url(img_url)
+        result['lat'] = lat
+        result['lon'] = lon
+    except Exception:
+        pass
+    return jsonify(no_null_json(result))
 
 
 '''
@@ -357,9 +364,8 @@ def get_location_json_of_img():
 
 @app.route('/entity', methods=['POST'])
 def get_entity_by_json():
-    result = {}
     main_text = no_null_str(request.json["main_text"])
-    return jsonify(get_entity_by_str(main_text))
+    return jsonify(no_null_json(get_entity_by_str(main_text)))
 
 
 '''
@@ -372,7 +378,7 @@ def get_entity_by_json():
 
 @app.route('/location', methods=['POST'])
 def reverse_location_search():
-    return jsonify(get_location_by_lat_lon(request.json))
+    return jsonify(no_null_json(get_location_by_lat_lon(request.json)))
 
 
 '''
@@ -385,7 +391,7 @@ def reverse_location_search():
 @app.route('/getlocationbyname', methods=['POST'])
 def location_search():
     string = no_null_str(request.json["name"])
-    return jsonify(get_location_by_str(string))
+    return jsonify(no_null_json(get_location_by_str(string)))
 
 
 '''
@@ -398,7 +404,7 @@ def location_search():
 @app.route('/news', methods=['POST'])
 def news_search():
     string = no_null_str(request.json["query"])
-    return jsonify(get_new_by_str(string))
+    return jsonify(no_null_json(get_new_by_str(string)))
 
 
 @app.route('/exif', methods=['GET'])
@@ -412,7 +418,7 @@ def get_example_of_exif_img():
 @app.route('/people', methods=['POST'])
 def get_people():
     string = no_null_str(request.json["img_url"])
-    return jsonify(get_people_from_url(string))
+    return jsonify(no_null_json(get_people_from_url(string)))
 
 
 if __name__ == '__main__':

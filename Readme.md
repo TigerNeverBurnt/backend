@@ -18,6 +18,7 @@
 
 ```bash
 sudo apt-get update
+udo apt-get install nginx
 sudo apt-get install python3.6
 sudo apt-get install python3-pip
 sudo pip3 install virtualenv
