@@ -10,7 +10,7 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import requests as req
 import json
-from pprint import pprint
+# from pprint import pprint
 import exifread
 from io import BytesIO
 

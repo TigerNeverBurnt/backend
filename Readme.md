@@ -4,7 +4,7 @@
 
 ---
 
-- Huiming Sun 
+- Huiming Sun
 - Xinrui Yang
 - Han Song
 - Ding Hao
@@ -23,6 +23,7 @@ sudo apt-get install python3.6
 sudo apt-get install python3-pip
 sudo pip3 install virtualenv
 ```
+
 ```bash
 git clone https://github.com/TigerNeverBurnt/backend.git
 cd backend
@@ -113,8 +114,6 @@ You Can Edit `gunicorn.conf.py` to change default config
 更多的是来自自己公司的资源与自己拍摄的图片
 但是这些图片实际上可以表示更高维度的知识
 我们的作品可以导入图片完成从图片找到相关的新闻的功能
-
-
 
 实际上这些图片很多是记者自己拍的
 使用统一的接口即可
