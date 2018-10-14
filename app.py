@@ -10,9 +10,10 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import requests as req
 import json
-# from pprint import pprint
+from pprint import pprint
 import exifread
 from io import BytesIO
+import traceback
 
 nltk.download('stopwords')
 nltk.download('punkt')
@@ -301,19 +302,25 @@ def hello():
 
 @app.route('/', methods=['POST'])
 def web_get_images_by_search_text():
-    result = []
+    result = None
     try:
         result_main = []
         result_search = []
 
-        main_text = no_null_str(request.json["main_text"])
-        search_text = no_null_str(request.json["search_text"])
+        try:
+            main_text = no_null_str(request.json["main_text"])
+        except KeyError:
+            main_text = ""
+        try:
+            search_text = no_null_str(request.json["search_text"])
+        except KeyError:
+            search_text = ""
 
         # filtered_main_words = filter_stop_word(main_text)
         # filtered_search_text = filter_stop_word(search_text)
 
-        key_phrase_main_text_list = key_phrase(main_text)
-        # key_phrase_search_text_list = key_phrase(search_text)
+        key_phrase_main_text_list = no_null_list(key_phrase(main_text))
+        key_phrase_search_text_list = no_null_list(key_phrase(search_text))
 
         for query in key_phrase_main_text_list or []:
             image_results = BING_IMAGE_SEARCH_CLIENT.images.search(query=query)
@@ -325,27 +332,34 @@ def web_get_images_by_search_text():
                                        "date_published": x.date_published},
                             image_results.value)))
 
-        image_results = BING_IMAGE_SEARCH_CLIENT.images.search(query=search_text)
-        if image_results.value:
-            result_search.extend(
-                list(map(lambda x: {"thumbnail_url": x.thumbnail_url, "content_url": x.content_url, "detail": x.name,
-                                    "description": x.description, "host_page_url": x.host_page_url,
-                                    "date_published": x.date_published},
-                         image_results.value)))
-
-        result.extend(no_null_list(result_search[0:5]))
-        result.extend(no_null_list(result_main[0:20]))
+        for query in key_phrase_search_text_list or []:
+            image_results = BING_IMAGE_SEARCH_CLIENT.images.search(query=query)
+            if image_results.value:
+                result_search.extend(
+                    list(
+                        map(lambda x: {"thumbnail_url": x.thumbnail_url, "content_url": x.content_url, "detail": x.name,
+                                       "description": x.description, "host_page_url": x.host_page_url,
+                                       "date_published": x.date_published},
+                            image_results.value)))
+        result = []
+        result.extend(no_null_list(result_search[:5]))
+        result.extend(no_null_list(result_main[:20]))
         result = sorted(result, key=lambda k: k['date_published'], reverse=True)
+        return jsonify(no_null_json(result[:25]))
     except Exception:
-        pass
-    return jsonify(no_null_json(result[:25]))
+        print(traceback.format_exc())
+        print("ERROR")
+    return jsonify(no_null_json(None))
 
 
 @app.route('/img', methods=['POST'])
 def get_location_json_of_img():
     result = {}
     try:
-        img_url = no_null_str(request.json["img_url"])
+        try:
+            img_url = no_null_str(request.json["img_url"])
+        except KeyError:
+            img_url = ""
         lat, lon = exifread_infos_by_url(img_url)
         result['lat'] = lat
         result['lon'] = lon
@@ -364,7 +378,10 @@ def get_location_json_of_img():
 
 @app.route('/entity', methods=['POST'])
 def get_entity_by_json():
-    main_text = no_null_str(request.json["main_text"])
+    try:
+        main_text = no_null_str(request.json["main_text"])
+    except KeyError:
+        main_text = ""
     return jsonify(no_null_json(get_entity_by_str(main_text)))
 
 
@@ -390,7 +407,10 @@ def reverse_location_search():
 
 @app.route('/getlocationbyname', methods=['POST'])
 def location_search():
-    string = no_null_str(request.json["name"])
+    try:
+        string = no_null_str(request.json["name"])
+    except KeyError:
+        string = ""
     return jsonify(no_null_json(get_location_by_str(string)))
 
 
@@ -403,7 +423,11 @@ def location_search():
 
 @app.route('/news', methods=['POST'])
 def news_search():
-    string = no_null_str(request.json["query"])
+    try:
+        string = no_null_str(request.json["query"])
+    except KeyError:
+        string = ""
+
     return jsonify(no_null_json(get_new_by_str(string)))
 
 
@@ -417,7 +441,10 @@ def get_example_of_exif_img():
 
 @app.route('/people', methods=['POST'])
 def get_people():
-    string = no_null_str(request.json["img_url"])
+    try:
+        string = no_null_str(request.json["img_url"])
+    except KeyError:
+        string = ""
     return jsonify(no_null_json(get_people_from_url(string)))
 
 
