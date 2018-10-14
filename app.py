@@ -344,12 +344,20 @@ def web_get_images_by_search_text():
         result = []
         result.extend(no_null_list(result_search[:5]))
         result.extend(no_null_list(result_main[:20]))
+        result = list(filter(lambda x: is_stable_image_url(x["content_url"]), result))
         result = sorted(result, key=lambda k: k['date_published'], reverse=True)
         return jsonify(no_null_json(result[:25]))
     except Exception:
         print(traceback.format_exc())
         print("ERROR")
     return jsonify(no_null_json(None))
+
+
+def is_stable_image_url(url):
+    res = req.head(url, headers=FAKE_HEADER, verify=False)
+    print(url)
+    print(res.status_code)
+    return res.status_code == 200
 
 
 @app.route('/img', methods=['POST'])
@@ -435,7 +443,13 @@ def news_search():
 def get_example_of_exif_img():
     data = []
     for i in [10, 12, 21, 25, 27, 29, 38, 40, 42]:
-        data.append(f'https://raw.githubusercontent.com/ianare/exif-samples/master/jpg/gps/DSCN00{i}.jpg')
+        result = {}
+        url = f'https://raw.githubusercontent.com/ianare/exif-samples/master/jpg/gps/DSCN00{i}.jpg'
+        lat, lon = exifread_infos_by_url(url)
+        result['lat'] = lat
+        result['lon'] = lon
+        result['url'] = url
+        data.append(result)
     return jsonify(data)
 
 
